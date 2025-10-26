@@ -16,7 +16,7 @@ const app = express();
 // Middleware Configuration
 app.use(cors({
   // --- THIS LINE IS THE FIX ---
-  origin: ['http://localhost:5173', 'http://localhost:5174'], // Allow both ports
+  origin: process.env.FRONTEND_URL, // Allow both ports
   credentials: true
 }));
 app.use(express.json());
