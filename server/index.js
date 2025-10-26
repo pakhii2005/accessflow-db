@@ -1,0 +1,313 @@
+// ============================================
+// AccessFlow Backend Server - index.js
+// ============================================
+
+// Import required dependencies
+const express = require('express');
+const { Pool } = require('pg');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+require('dotenv').config();
+
+// Initialize Express app
+const app = express();
+
+// Middleware Configuration
+app.use(cors({
+  // --- THIS LINE IS THE FIX ---
+  origin: ['http://localhost:5173', 'http://localhost:5174'], // Allow both ports
+  credentials: true
+}));
+app.use(express.json());
+
+// Database Connection Pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// Test database connection
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('Error connecting to the database:', err.stack);
+  } else {
+    console.log('✓ Database connected successfully');
+    release();
+  }
+});
+
+// ============================================
+// Authentication Middleware
+// ============================================
+
+const checkAuth = (req, res, next) => {
+  try {
+    // Get token from Authorization header
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'No token provided. Authorization header must be in format: Bearer <token>' 
+      });
+    }
+
+    // Extract token (remove 'Bearer ' prefix)
+    const token = authHeader.substring(7);
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Attach user data to request object
+    req.user = { userId: decoded.userId };
+    
+    next();
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+    return res.status(401).json({ error: 'Authentication failed' });
+  }
+};
+
+// ============================================
+// Authentication Routes (No Auth Required)
+// ============================================
+
+// POST /api/auth/register - Register a new user
+app.post('/api/auth/register', async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { email, password } = req.body;
+
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Check if user already exists
+    const userExists = await client.query(
+      'SELECT user_id FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (userExists.rows.length > 0) {
+      return res.status(409).json({ error: 'User with this email already exists' });
+    }
+
+    // Hash the password
+    const saltRounds = 10;
+    const password_hash = await bcrypt.hash(password, saltRounds);
+
+    // Begin transaction
+    await client.query('BEGIN');
+
+    // Insert new user into users table
+    const insertUserResult = await client.query(
+      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING user_id, email',
+      [email, password_hash]
+    );
+
+    const newUser = insertUserResult.rows[0];
+
+    // Create empty profile for the new user
+    await client.query(
+      'INSERT INTO profiles (user_id, settings) VALUES ($1, $2)',
+      [newUser.user_id, JSON.stringify({})]
+    );
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: newUser.user_id, email: newUser.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Return success response
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: {
+        user_id: newUser.user_id,
+        email: newUser.email
+      }
+    });
+
+  } catch (error) {
+    // Rollback transaction on error
+    await client.query('ROLLBACK');
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Server error during registration' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/auth/login - Login existing user
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    const result = await pool.query(
+      'SELECT user_id, email, password_hash FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const user = result.rows[0];
+
+    // Compare password with hash
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.user_id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Return success response
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: {
+        user_id: user.user_id,
+        email: user.email
+      }
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// ============================================
+// Profile Routes (Auth Required)
+// ============================================
+
+// GET /api/profile - Get user profile settings
+app.get('/api/profile', checkAuth, async (req, res) => {
+  try {
+    const { userId } = req.user;
+
+    // Get profile from database
+    const result = await pool.query(
+      'SELECT profile_id, user_id, settings FROM profiles WHERE user_id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const profile = result.rows[0];
+
+    res.status(200).json({
+      profile_id: profile.profile_id,
+      user_id: profile.user_id,
+      settings: profile.settings
+    });
+
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: 'Server error fetching profile' });
+  }
+});
+
+// PUT /api/profile - Update user profile settings
+app.put('/api/profile', checkAuth, async (req, res) => {
+  try {
+    const { userId } = req.user;
+    const { settings } = req.body;
+
+    // Validation
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'Settings must be a valid object' });
+    }
+
+    // Update profile in database
+    const result = await pool.query(
+      'UPDATE profiles SET settings = $1 WHERE user_id = $2 RETURNING profile_id, user_id, settings',
+      [JSON.stringify(settings), userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const updatedProfile = result.rows[0];
+
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      profile_id: updatedProfile.profile_id,
+      user_id: updatedProfile.user_id,
+      settings: updatedProfile.settings
+    });
+
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Server error updating profile' });
+  }
+});
+
+// ============================================
+// Health Check Route
+// ============================================
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    message: 'AccessFlow API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ============================================
+// 404 Handler
+// ============================================
+
+app.use((req, res) => {
+  res.status(44).json({ error: 'Route not found' });
+});
+
+// ============================================
+// Server Start
+// ============================================
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`
+╔════════════════════════════════════════╗
+║   AccessFlow Backend Server Started    ║
+╠════════════════════════════════════════╣
+║   Port: ${PORT}                        ║
+║   Environment: ${process.env.NODE_ENV || 'development'}          ║
+║   Frontend URL: http://localhost:5173  ║
+╚════════════════════════════════════════╝
+  `);
+});
