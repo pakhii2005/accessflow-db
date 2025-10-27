@@ -3,6 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { UserPlus, Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, Sparkles } from 'lucide-react';
 
+// 1. THIS VARIABLE LETS YOUR CODE WORK IN DEV AND PRODUCTION
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const SignupPage = ({ setIsLoggedIn }) => {
   // State management
   const [email, setEmail] = useState('');
@@ -42,7 +45,10 @@ const SignupPage = ({ setIsLoggedIn }) => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', {
+      // =========================================================
+      // 2. THIS IS THE CORRECTED AXIOS CALL
+      // =========================================================
+      const response = await axios.post(`${API_URL}/api/auth/register`, {
         email,
         password
       });
@@ -68,11 +74,11 @@ const SignupPage = ({ setIsLoggedIn }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-white pt-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Animated background blobs */}
+      {/* Background blobs (styling only) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-        <div className="absolute top-40 right-10 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-        <div className="absolute bottom-20 left-1/2 w-72 h-72 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+        <div className="absolute top-40 right-10 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+        <div className="absolute bottom-20 left-1/2 w-72 h-72 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
       </div>
 
       <div className={`max-w-md mx-auto py-16 relative z-10 transform transition-all duration-700 ${
@@ -148,7 +154,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
               
               {/* Password Strength Indicator */}
               {password && (
-                <div className="mt-3 space-y-2 animate-slide-down">
+                <div className="mt-3 space-y-2"> {/* Removed animation class */}
                   <div className="flex gap-1">
                     {[...Array(5)].map((_, i) => (
                       <div
@@ -172,7 +178,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
 
             {/* Error Message */}
             {error && (
-              <div className="flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-lg animate-shake">
+              <div className="flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-lg"> {/* Removed animation class */}
                 <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5 animate-pulse" />
                 <div>
                   <p className="text-lg font-medium text-red-800">Registration Failed</p>
@@ -223,7 +229,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
         </div>
 
         {/* Privacy Notice */}
-        <p className="mt-8 text-center text-sm text-gray-500 animate-fade-in animation-delay-500">
+        <p className="mt-8 text-center text-sm text-gray-500"> {/* Removed animation class */}
           By signing up, you agree to our{' '}
           <Link to="/terms" className="text-blue-600 hover:text-blue-700 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
             Terms of Service
@@ -235,53 +241,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
         </p>
       </div>
 
-      <style jsx>{`
-        @keyframes blob {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-        .animation-delay-500 {
-          animation-delay: 0.5s;
-        }
-        @keyframes slide-down {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-slide-down {
-          animation: slide-down 0.3s ease-out;
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-          20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-        .animate-shake {
-          animation: shake 0.5s ease-in-out;
-        }
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-in forwards;
-        }
-      `}</style>
+      {/* 3. THE <style jsx> BLOCK HAS BEEN REMOVED. */}
     </div>
   );
 };

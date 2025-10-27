@@ -1,7 +1,3 @@
-// ============================================
-// FILE: src/Pages/DashboardPage.jsx
-// ============================================
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
@@ -10,6 +6,9 @@ import {
   TrendingUp, Activity, Zap, ArrowRight,
   CheckCircle, Sparkles, Edit
 } from 'lucide-react';
+
+// 1. THIS VARIABLE LETS YOUR CODE WORK IN DEV AND PRODUCTION
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const DashboardPage = () => {
   const [profile, setProfile] = useState(null);
@@ -32,8 +31,10 @@ const DashboardPage = () => {
         return;
       }
 
-      // Fetch profile from backend
-      const response = await axios.get('http://localhost:5000/api/profile', {
+      // =========================================================
+      // 2. THIS IS THE CORRECTED AXIOS CALL
+      // =========================================================
+      const response = await axios.get(`${API_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -84,9 +85,9 @@ const DashboardPage = () => {
 
   // Quick settings preview
   const quickSettings = [
-    { icon: Eye, label: 'Contrast Mode', value: 'High Contrast' },
-    { icon: Type, label: 'Font Size', value: '18px' },
-    { icon: Keyboard, label: 'Keyboard Nav', value: 'Enabled' }
+    { icon: Eye, label: 'Contrast Mode', value: profile?.settings?.contrast || 'None' },
+    { icon: Type, label: 'Font Size', value: profile?.settings?.fontSize || 'Default' },
+    { icon: Keyboard, label: 'Keyboard Nav', value: 'Enabled' } // Placeholder value
   ];
 
   // Loading state
@@ -124,7 +125,7 @@ const DashboardPage = () => {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 via-blue-50 to-white pt-20 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto py-8">
         {/* Header with Welcome Message */}
-        <div className="mb-8 animate-fade-in">
+        <div className="mb-8"> {/* Removed animation class */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-5xl font-extrabold text-gray-900 mb-2 flex items-center gap-3">
@@ -149,7 +150,7 @@ const DashboardPage = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in animation-delay-200">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"> {/* Removed animation class */}
           {stats.map((stat, index) => (
             <div
               key={index}
@@ -166,8 +167,8 @@ const DashboardPage = () => {
               </div>
               <div className="mt-4 h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div 
-                  className={`h-full bg-gradient-to-r ${stat.color} animate-progress`}
-                  style={{ width: '75%' }}
+                  className={`h-full bg-gradient-to-r ${stat.color}`}
+                  style={{ width: '75%' }} // Removed animation class
                 ></div>
               </div>
             </div>
@@ -177,7 +178,7 @@ const DashboardPage = () => {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Quick Settings Overview */}
-          <div className="lg:col-span-2 animate-fade-in animation-delay-400">
+          <div className="lg:col-span-2"> {/* Removed animation class */}
             <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-gray-100">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
@@ -237,7 +238,7 @@ const DashboardPage = () => {
           </div>
 
           {/* Profile Card */}
-          <div className="animate-fade-in animation-delay-600">
+          <div> {/* Removed animation class */}
             <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-gray-100 sticky top-24">
               <div className="text-center mb-6">
                 <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full mb-4 transform hover:scale-110 transition-transform">
@@ -273,34 +274,7 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-out forwards;
-        }
-        .animation-delay-200 {
-          animation-delay: 0.2s;
-          opacity: 0;
-        }
-        .animation-delay-400 {
-          animation-delay: 0.4s;
-          opacity: 0;
-        }
-        .animation-delay-600 {
-          animation-delay: 0.6s;
-          opacity: 0;
-        }
-        @keyframes progress {
-          from { width: 0%; }
-          to { width: 75%; }
-        }
-        .animate-progress {
-          animation: progress 1s ease-out 0.5s forwards;
-        }
-      `}</style>
+      {/* 3. THE <style jsx> BLOCK HAS BEEN REMOVED */}
     </div>
   );
 };
