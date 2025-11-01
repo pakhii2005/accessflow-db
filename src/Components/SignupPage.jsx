@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import { UserPlus, Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, Sparkles } from 'lucide-react';
+// --- 1. ADDITION ---
+// Added 'User' icon for the new Name field
+import { User, UserPlus, Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, Sparkles } from 'lucide-react';
 
-// 1. THIS VARIABLE LETS YOUR CODE WORK IN DEV AND PRODUCTION
+// This variable lets your code work in dev and production
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const SignupPage = ({ setIsLoggedIn }) => {
   // State management
+  // --- 2. ADDITION ---
+  const [name, setName] = useState(''); // Added state for the name
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -46,9 +50,11 @@ const SignupPage = ({ setIsLoggedIn }) => {
 
     try {
       // =========================================================
-      // 2. THIS IS THE CORRECTED AXIOS CALL
+      // --- 3. CORRECTION ---
+      // Added the 'name' field to the request body
       // =========================================================
       const response = await axios.post(`${API_URL}/api/auth/register`, {
+        name, // This field is now included
         email,
         password
       });
@@ -99,6 +105,28 @@ const SignupPage = ({ setIsLoggedIn }) => {
 
         <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-gray-100 transform transition-all hover:shadow-2xl hover:scale-[1.02]">
           <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* --- ADDED NAME INPUT --- */}
+            <div className="transform transition-all duration-300 hover:scale-[1.01]">
+              <label htmlFor="name" className="block text-lg font-medium text-gray-900 mb-2">
+                Full Name
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors">
+                  <User className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500" />
+                </div>
+                <input
+                  id="name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="block w-full pl-12 pr-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-gray-400"
+                  placeholder="e.g., John Doe"
+                />
+              </div>
+            </div>
+
             {/* Email Input */}
             <div className="transform transition-all duration-300 hover:scale-[1.01]">
               <label htmlFor="email" className="block text-lg font-medium text-gray-900 mb-2">
@@ -154,7 +182,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
               
               {/* Password Strength Indicator */}
               {password && (
-                <div className="mt-3 space-y-2"> {/* Removed animation class */}
+                <div className="mt-3 space-y-2">
                   <div className="flex gap-1">
                     {[...Array(5)].map((_, i) => (
                       <div
@@ -178,7 +206,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
 
             {/* Error Message */}
             {error && (
-              <div className="flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-lg"> {/* Removed animation class */}
+              <div className="flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-lg">
                 <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5 animate-pulse" />
                 <div>
                   <p className="text-lg font-medium text-red-800">Registration Failed</p>
@@ -198,6 +226,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
                   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+
                   </svg>
                   Creating Account...
                 </span>
@@ -229,7 +258,7 @@ const SignupPage = ({ setIsLoggedIn }) => {
         </div>
 
         {/* Privacy Notice */}
-        <p className="mt-8 text-center text-sm text-gray-500"> {/* Removed animation class */}
+        <p className="mt-8 text-center text-sm text-gray-500">
           By signing up, you agree to our{' '}
           <Link to="/terms" className="text-blue-600 hover:text-blue-700 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
             Terms of Service
@@ -240,10 +269,9 @@ const SignupPage = ({ setIsLoggedIn }) => {
           </Link>
         </p>
       </div>
-
-      {/* 3. THE <style jsx> BLOCK HAS BEEN REMOVED. */}
     </div>
   );
 };
 
 export default SignupPage;
+

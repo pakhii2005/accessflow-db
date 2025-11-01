@@ -8,15 +8,16 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const pa11y = require('pa11y'); // <-- New import
 require('dotenv').config();
 
 // Initialize Express app
 const app = express();
 
+
 // Middleware Configuration
 app.use(cors({
-  // --- THIS LINE IS THE FIX ---
-  origin: process.env.FRONTEND_URL, // Allow both ports
+  origin: process.env.FRONTEND_URL,
   credentials: true
 }));
 app.use(express.json());
@@ -81,11 +82,11 @@ app.post('/api/auth/register', async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { email, password } = req.body;
+    const { name, email, password } = req.body;
 
     // Validation
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
     }
 
     if (password.length < 6) {
@@ -111,8 +112,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Insert new user into users table
     const insertUserResult = await client.query(
-      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING user_id, email',
-      [email, password_hash]
+      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING user_id, name, email',
+      [name, email, password_hash]
     );
 
     const newUser = insertUserResult.rows[0];
@@ -139,6 +140,7 @@ app.post('/api/auth/register', async (req, res) => {
       token,
       user: {
         user_id: newUser.user_id,
+        name: newUser.name,
         email: newUser.email
       }
     });
@@ -165,7 +167,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Find user by email
     const result = await pool.query(
-      'SELECT user_id, email, password_hash FROM users WHERE email = $1',
+      'SELECT user_id, name, email, password_hash FROM users WHERE email = $1',
       [email]
     );
 
@@ -195,6 +197,7 @@ app.post('/api/auth/login', async (req, res) => {
       token,
       user: {
         user_id: user.user_id,
+        name: user.name,
         email: user.email
       }
     });
@@ -214,22 +217,35 @@ app.get('/api/profile', checkAuth, async (req, res) => {
   try {
     const { userId } = req.user;
 
-    // Get profile from database
     const result = await pool.query(
-      'SELECT profile_id, user_id, settings FROM profiles WHERE user_id = $1',
+      `SELECT 
+         u.user_id, 
+         u.name, 
+         u.email, 
+         p.profile_id, 
+         p.settings 
+       FROM users u
+       LEFT JOIN profiles p ON u.user_id = p.user_id
+       WHERE u.user_id = $1`,
       [userId]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Profile not found' });
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const profile = result.rows[0];
+    const profileData = result.rows[0];
+
+    if (!profileData.profile_id) {
+        return res.status(404).json({ error: 'Profile not found for this user' });
+    }
 
     res.status(200).json({
-      profile_id: profile.profile_id,
-      user_id: profile.user_id,
-      settings: profile.settings
+      user_id: profileData.user_id,
+      name: profileData.name,
+      email: profileData.email,
+      profile_id: profileData.profile_id,
+      settings: profileData.settings
     });
 
   } catch (error) {
@@ -244,12 +260,10 @@ app.put('/api/profile', checkAuth, async (req, res) => {
     const { userId } = req.user;
     const { settings } = req.body;
 
-    // Validation
     if (!settings || typeof settings !== 'object') {
       return res.status(400).json({ error: 'Settings must be a valid object' });
     }
 
-    // Update profile in database
     const result = await pool.query(
       'UPDATE profiles SET settings = $1 WHERE user_id = $2 RETURNING profile_id, user_id, settings',
       [JSON.stringify(settings), userId]
@@ -263,9 +277,7 @@ app.put('/api/profile', checkAuth, async (req, res) => {
 
     res.status(200).json({
       message: 'Profile updated successfully',
-      profile_id: updatedProfile.profile_id,
-      user_id: updatedProfile.user_id,
-      settings: updatedProfile.settings
+      profile: updatedProfile
     });
 
   } catch (error) {
@@ -273,6 +285,94 @@ app.put('/api/profile', checkAuth, async (req, res) => {
     res.status(500).json({ error: 'Server error updating profile' });
   }
 });
+
+
+// ============================================
+// Scan Routes (Auth Required)
+// ============================================
+
+// POST /api/scans - Run a new scan
+app.post('/api/scans', checkAuth, async (req, res) => {
+  const { url } = req.body;
+  const { userId } = req.user;
+
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    // Run the pa11y scan
+    const results = await pa11y(url);
+
+    // Scan succeeded, save to DB
+    const insertQuery = `
+      INSERT INTO scans (user_id, url, status, results)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+    const scanData = await client.query(insertQuery, [
+      userId,
+      url,
+      'completed',
+      JSON.stringify(results) // Store results as JSONB
+    ]);
+
+    res.status(201).json(scanData.rows[0]);
+
+  } catch (error) {
+    // Scan failed, save the error to DB
+    console.error('Scan error:', error.message);
+    
+    try {
+      const insertQuery = `
+        INSERT INTO scans (user_id, url, status, results)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+      `;
+      // Create a simple error object to store
+      const errorResult = { 
+        name: error.name || 'ScanError',
+        message: error.message || 'An unknown error occurred during the scan.'
+      };
+
+      const scanData = await client.query(insertQuery, [
+        userId,
+        url,
+        'failed',
+        JSON.stringify(errorResult) // Store the error message as JSONB
+      ]);
+      
+      // Return the "failed scan" record, but with a 500 status
+      // because the scan itself failed.
+      res.status(500).json(scanData.rows[0]);
+
+    } catch (dbError) {
+      // If saving the error to the DB *also* fails
+      console.error('DB error after scan failure:', dbError);
+      res.status(500).json({ error: 'Scan failed and could not be logged.' });
+    }
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/scans - Get all of a user's scans
+app.get('/api/scans', checkAuth, async (req, res) => {
+  const { userId } = req.user;
+
+  try {
+    const result = await pool.query(
+      'SELECT * FROM scans WHERE user_id = $1 ORDER BY scanned_at DESC',
+      [userId]
+    );
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Get scans error:', error);
+    res.status(500).json({ error: 'Server error fetching scans' });
+  }
+});
+
 
 // ============================================
 // Health Check Route
@@ -291,7 +391,7 @@ app.get('/api/health', (req, res) => {
 // ============================================
 
 app.use((req, res) => {
-  res.status(44).json({ error: 'Route not found' });
+  res.status(404).json({ error: 'Route not found' });
 });
 
 // ============================================
@@ -303,11 +403,12 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════╗
-║   AccessFlow Backend Server Started    ║
+║   AccessFlow Backend Server Started    ║
 ╠════════════════════════════════════════╣
-║   Port: ${PORT}                        ║
-║   Environment: ${process.env.NODE_ENV || 'development'}          ║
-║   Frontend URL: http://localhost:5173  ║
+║   Port: ${PORT}                        ║
+║   Environment: ${process.env.NODE_ENV || 'development'}          ║
+║   Frontend URL: ${process.env.FRONTEND_URL}  ║
 ╚════════════════════════════════════════╝
   `);
 });
+
